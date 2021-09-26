@@ -67,8 +67,8 @@ log = logging.getLogger(Path(__file__).stem)  # The only okay global variable.
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument("--embeddings", type=Path, help="Path to word embeddings file.")
-    parser.add_argument("--word", type=str, help="Word to lookup")
+    parser.add_argument("embeddings", type=Path, help="Path to word embeddings file.")
+    parser.add_argument("word", type=str, help="Word to lookup")
     parser.add_argument("--minus", type=str, default=None)
     parser.add_argument("--plus", type=str, default=None)
 
