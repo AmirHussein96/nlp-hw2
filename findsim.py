@@ -12,9 +12,11 @@ import argparse
 import logging
 from pathlib import Path
 from integerize import Integerizer   # look at integerize.py for more info
-
+import numpy as np
 # For type annotations, which enable you to check correctness of your code:
 from typing import List, Optional
+import pdb
+
 
 try:
     # PyTorch is your friend. Not *using* it will make your program so slow.
@@ -65,8 +67,8 @@ log = logging.getLogger(Path(__file__).stem)  # The only okay global variable.
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument("embeddings", type=Path, help="Path to word embeddings file.")
-    parser.add_argument("word", type=str, help="Word to lookup")
+    parser.add_argument("--embeddings", type=Path, help="Path to word embeddings file.")
+    parser.add_argument("--word", type=str, help="Word to lookup")
     parser.add_argument("--minus", type=str, default=None)
     parser.add_argument("--plus", type=str, default=None)
 
@@ -91,17 +93,19 @@ def parse_args() -> argparse.Namespace:
     return args
 
 class Lexicon:
-    """
+	"""
     Class that manages a lexicon and can compute similarity.
 
     >>> my_lexicon = Lexicon.from_file(my_file)
-    >>> my_lexicon.find_similar_words(bagpipe)
-    """
+	>>> my_lexicon.find_similar_words(bagpipe)
+	"""
 
-    def __init__(self) -> None:
-        """Load information into coupled word-index mapping and embedding matrix."""
-        # FINISH THIS FUNCTION
-
+	def __init__(self, int_to_word={},word_to_int={},embeddings=None) -> None:
+		"""Load information into coupled word-index mapping and embedding matrix."""
+		# FINISH THIS FUNCTION
+		self.word_to_int = word_to_int
+		self.int_to_word = int_to_word
+		self.embeddings = embeddings
         # Store your stuff! Both the word-index mapping and the embedding matrix.
         #
         # Do something with this size info?
@@ -112,24 +116,35 @@ class Lexicon:
         # Probably make the entire list all at once, then convert to a th.Tensor.
         # Otherwise, make the th.Tensor and overwrite its contents row-by-row.
 
-    @classmethod
-    def from_file(cls, file: Path) -> Lexicon:
+	@classmethod
+	def from_file(cls, file: Path) -> Lexicon:
         # FINISH THIS FUNCTION
+		lines = []
+		count = 0
+		word_to_int = {}
+		int_to_word={}
+		
+		with open(file) as f:
+			first_line = next(f)  # Peel off the special first line.
+			for line in f:  # All of the other lines are regular.
+                  # `pass` is a placeholder. Replace with real code!
+				line = line.split('\t')
+				lines.append(np.array(line[1:],dtype=np.float64))
+				int_to_word[count]=line[0]
+				word_to_int[line[0]]=count
+				count+=1
+		embeddings = th.tensor(lines, dtype=th.float64)
+		lexicon = Lexicon(int_to_word,word_to_int, embeddings)  # Maybe put args here. Maybe follow Builder pattern
+		return lexicon
 
-        with open(file) as f:
-            first_line = next(f)  # Peel off the special first line.
-            for line in f:  # All of the other lines are regular.
-                pass  # `pass` is a placeholder. Replace with real code!
-
-        lexicon = Lexicon()  # Maybe put args here. Maybe follow Builder pattern.
-        return lexicon
-
-    def find_similar_words(
+	def find_similar_words(
         self, word: str, *, plus: Optional[str] = None, minus: Optional[str] = None
     ) -> List[str]:
-        """Find most similar words, in terms of embeddings, to a query."""
+		"""Find most similar words, in terms of embeddings, to a query."""
         # FINISH THIS FUNCTION
-
+		# first check if the word is in the lexicon
+		
+		if word in self.word_to_int:
         # The star above forces you to use `plus` and `minus` as
         # named arguments. This helps avoid mixups or readability
         # problems where you forget which comes first.
@@ -138,30 +153,56 @@ class Lexicon:
         # Optional[str]. This means that the argument may be None, or
         # it may be a string. If you don't provide these, it'll automatically
         # use the default value we provided: None.
-        if (minus is None) != (plus is None):  # != is the XOR operation!
-            raise TypeError("Must include both of `plus` and `minus` or neither.")
-        # Keep going!
-        # Be sure that you use fast, batched computations
-        # instead of looping over the rows. If you use a loop or a comprehension
-        # in this function, you've probably made a mistake.
-        return []
+			if (minus is None) != (plus is None):  # != is the XOR operation!
+				raise TypeError("Must include both of `plus` and `minus` or neither.")
+			# Keep going!
+			# Be sure that you use fast, batched computations 
+			# instead of looping over the rows. If you use a loop or a comprehension
+			# in this function, you've probably made a mistake.
+			word_ind = self.word_to_int[word]
+			#pdb.set_trace()
+			word_vec = th.unsqueeze(self.embeddings[word_ind,:],1)
+			plus_vec = th.zeros(word_vec.shape, dtype=th.float64)
+			minus_vec = th.zeros(word_vec.shape, dtype=th.float64)
+			ind_to_remove = [word_ind]
+			if (minus != None) and (plus != None):
+				plus_ind = self.word_to_int[plus]
+				plus_vec = th.unsqueeze(self.embeddings[plus_ind,:],1)
+				minus_ind = self.word_to_int[minus]
+				minus_vec = th.unsqueeze(self.embeddings[minus_ind,:],1) 
+				ind_to_remove.append(minus_ind)
+				ind_to_remove.append(plus_ind)
+			#similarities = th.mm(self.embeddings, word_vec)
+			final_vec = word_vec + plus_vec - minus_vec
+			cos = th.nn.CosineSimilarity(dim=1, eps=1e-6)
+			similarities = cos(self.embeddings, final_vec.t())
+			v, ind = th.topk(th.squeeze(similarities), 13)
+			ind = ind.tolist()
+			#pdb.set_trace()
+			for i in ind_to_remove:
+				if i in ind:
+					 ind.remove(i)
+			top_words = [self.int_to_word[i] for i in ind[:10]]
+			
+			return top_words
+		else:
+			print("%s is not in the lexicon, please try another word"%(word))
 
 
 def format_for_printing(word_list: List[str]) -> str:
     # We don't print out the list as-is; the handout
     # asks that you display it in a particular way.
     # FINISH THIS FUNCTION
-    return ""
+    return " ".join(word_list)
 
 
 def main():
-    args = parse_args()
-    logging.basicConfig(level=args.verbose)
-    lexicon = Lexicon.from_file(args.embeddings)
-    similar_words = lexicon.find_similar_words(
-        args.word, plus=args.plus, minus=args.minus
-    )
-    print(format_for_printing(similar_words))
+	args = parse_args()
+	logging.basicConfig(level=args.verbose)
+	lexicon = Lexicon.from_file(args.embeddings)
+	similar_words = lexicon.find_similar_words(
+        args.word, plus=args.plus, minus=args.minus)
+	print(format_for_printing(similar_words))
 
 
 if __name__ == "__main__":
