@@ -178,7 +178,6 @@ class Lexicon:
 			similarities = cos(self.embeddings, final_vec.t())
 			v, ind = th.topk(th.squeeze(similarities), 13)
 			ind = ind.tolist()
-			#pdb.set_trace()
 			for i in ind_to_remove:
 				if i in ind:
 					 ind.remove(i)
@@ -186,7 +185,7 @@ class Lexicon:
 			
 			return top_words
 		else:
-			print("%s is not in the lexicon, please try another word"%(word))
+			pass
 
 
 def format_for_printing(word_list: List[str]) -> str:
